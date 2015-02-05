@@ -1,6 +1,17 @@
+//---------------------------------------------------------------------------------------
+// Galen Deal
+// CSS 502
+// Homework 3
+//
+// RedBlackTree
+//
+// This class is for a red-black tree object. Insert, lookup, and delete are all
+// guaranteed to be O(n) time.
+
 #pragma once
 
 #include <iostream>
+#include <queue>
 #include "TreeNode.h"
 
 enum insRebalanceCase { inscase1, inscase2, inscase3, inscase4, inscase5 };
@@ -20,8 +31,9 @@ public:
    void validateTree() const;
 
 private:
+   int size;
+
    TreeNode* root;
-   static TreeNode* nullLeaf;
    
    TreeNode* getGrandparent(TreeNode*) const;
    TreeNode* getUncle(TreeNode*) const;
@@ -32,6 +44,7 @@ private:
    TreeNode* retrieve(TreeNode*, int) const;
 
    TreeNode* makeNewNode(int) const;
+   TreeNode* makeNullNode(TreeNode*) const;
 
    void insRebalance(TreeNode*);
    void insRebalanceCase3(TreeNode*);
@@ -45,8 +58,8 @@ private:
    void remRebalanceCase5(TreeNode*);
    void remRebalanceCase6(TreeNode*);
 
-   TreeNode* rotateLeft(TreeNode*);
-   TreeNode* rotateRight(TreeNode*);
+   void rotateLeft(TreeNode*);
+   void rotateRight(TreeNode*);
 
    bool isRightChild(TreeNode*) const;
 
@@ -54,11 +67,11 @@ private:
    remRebalanceCase determineRemRebalanceCase(TreeNode*) const;
 
 
-   void printTree(TreeNode*) const;
+   void printTree(TreeNode*, int) const;
 
    void validateTree(TreeNode*, int) const;
 
-   void remove(TreeNode*);
+   void removeNodeWithFewerThanTwoChildren(TreeNode*);
    void removeNodeWithTwoChildren(TreeNode*);
    void replace(TreeNode*, TreeNode*);
 
