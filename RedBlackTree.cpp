@@ -1,36 +1,41 @@
 #include "RedBlackTree.h"
 
-TreeNode* RedBlackTree::nullLeaf = new TreeNode;
 
 RedBlackTree::RedBlackTree(void) {
    root = nullptr;
-
-   nullLeaf->color = black;
-   nullLeaf->leftChild = nullptr;
-   nullLeaf->rightChild = nullptr;
-   nullLeaf->isNullLeaf = true;
+   size = 0;
 }
 
 
 RedBlackTree::~RedBlackTree(void) {
+   while (size != 0) {
+      remove(root->data);
+   }
 }
 
 bool RedBlackTree::insert(int value) {
    TreeNode* newNode = makeNewNode(value);
-   if (newNode == nullptr) { return false; }
+   if (newNode == nullptr || newNode->rightChild == nullptr) { return false; }
    
    if(root == nullptr) {
       root = newNode;
    } else {
       TreeNode* parentNode = findInsertLocation(root, value);
 
-      if (value < parentNode->data) { parentNode->leftChild = newNode; }
-      else { parentNode->rightChild = newNode; }
+      if (value < parentNode->data) { 
+         delete parentNode->leftChild;
+         parentNode->leftChild = newNode; 
+      }
+      else { 
+         delete parentNode->rightChild;
+         parentNode->rightChild = newNode; 
+      }
 
       newNode->parent = parentNode;
    }
 
    insRebalance(newNode);
+   size++;
    return true;
 }
 
@@ -44,15 +49,27 @@ bool RedBlackTree::remove(int value) {
    if (!node->leftChild->isNullLeaf && !node->rightChild->isNullLeaf) {
       removeNodeWithTwoChildren(node);
    } else {
-      remove(node);
+      removeNodeWithFewerThanTwoChildren(node);
+   }
+
+   size--;
+   if (root->isNullLeaf) {
+      delete root;
+      root = nullptr;
    }
 
    return true;
 }
 
-void RedBlackTree::remove(TreeNode* node) {
+void RedBlackTree::removeNodeWithFewerThanTwoChildren(TreeNode* node) {
    TreeNode* child = 
       node->leftChild->isNullLeaf ? node->rightChild : node->leftChild;
+
+   if (isRightChild(child)) {
+      delete node->leftChild;
+   } else {
+      delete node->rightChild;
+   }
 
    replace(node, child);
 
@@ -77,7 +94,7 @@ void RedBlackTree::removeNodeWithTwoChildren(TreeNode* node) {
 
    node->data = current->data;
 
-   remove(current);
+   removeNodeWithFewerThanTwoChildren(current);
 }
 
 
@@ -85,7 +102,6 @@ void RedBlackTree::replace(TreeNode* oldNode, TreeNode* newNode) {
    
    if (oldNode == root) { 
       root = newNode; 
-      if (!newNode->isNullLeaf) { newNode->parent = nullptr; }
    }
    else {
       if (isRightChild(oldNode)) {
@@ -93,8 +109,9 @@ void RedBlackTree::replace(TreeNode* oldNode, TreeNode* newNode) {
       } else {
          oldNode->parent->leftChild = newNode;
       }
-      if (!newNode->isNullLeaf) { newNode->parent = oldNode->parent; }
    }
+
+   newNode->parent = oldNode->parent;
 }
 
 
@@ -116,20 +133,11 @@ TreeNode* RedBlackTree::getGrandparent(TreeNode* node) const {
 
 TreeNode* RedBlackTree::getUncle(TreeNode* node) const {
 
-   if (node == nullptr || (node->parent == nullptr || node->parent->parent == nullptr)) {
+   if (node == nullptr || (node->parent == nullptr || getGrandparent(node) == nullptr)) {
       return nullptr;
    }
 
-
-   TreeNode* grandparent = getGrandparent(node);
-
-   if (grandparent == nullptr) { return nullptr; }
-
-   if (isRightChild(node->parent)) {
-      return grandparent->leftChild;
-   } else {
-      return grandparent->rightChild;
-   }
+   return getSibling(node->parent);
 }
 
 
@@ -149,7 +157,7 @@ TreeNode* RedBlackTree::retrieve(int value) const {
 
 TreeNode* RedBlackTree::retrieve(TreeNode* node, int value) const {
 
-   if (node->isNullLeaf) { return nullptr; }
+   if (node == nullptr || node->isNullLeaf) { return nullptr; }
 
    if (node->data == value) { return node; }
 
@@ -177,13 +185,29 @@ TreeNode* RedBlackTree::makeNewNode(int data) const {
    if (node != nullptr) {
       node->data = data;
       node->isNullLeaf = false;
-      node->leftChild = nullLeaf;
-      node->rightChild = nullLeaf;
+      node->leftChild = makeNullNode(node);
+      node->rightChild = makeNullNode(node);
       node->parent = nullptr;
    }
 
    return node;
 }
+
+
+TreeNode* RedBlackTree::makeNullNode(TreeNode* parent) const {
+   TreeNode* node = new TreeNode;
+
+   if (node != nullptr) {
+      node->isNullLeaf = true;
+      node->leftChild = nullptr;
+      node->rightChild = nullptr;
+      node->color = black;
+      node->parent = parent;
+   }
+
+   return node;
+}
+
 
 void RedBlackTree::insRebalance(TreeNode* node) {
    
@@ -212,12 +236,10 @@ void RedBlackTree::insRebalanceCase4(TreeNode* node) {
    TreeNode* grandparent = getGrandparent(node);
    
    if (isRightChild(node)) {
-      grandparent->leftChild = rotateLeft(node->parent);
-      node->parent = grandparent;
+      rotateLeft(node->parent);
       node = node->leftChild;
    } else {
-      grandparent->rightChild = rotateRight(node->parent);
-      node->parent = grandparent;
+      rotateRight(node->parent);
       node = node->rightChild;
    }
 
@@ -226,43 +248,34 @@ void RedBlackTree::insRebalanceCase4(TreeNode* node) {
 
 
 void RedBlackTree::insRebalanceCase5(TreeNode* node) {
+   TreeNode* parent = node->parent;
    TreeNode* grandparent = getGrandparent(node);
-   TreeNode* rotatedNode;
-   TreeNode* gGrandparent = grandparent->parent;
-   bool gpIsLeftChild;
-   if (gGrandparent != nullptr) {
-      gpIsLeftChild = !isRightChild(grandparent);
-   }
 
    if (isRightChild(node)) {
-      rotatedNode = rotateLeft(grandparent);
-      rotatedNode->leftChild->color = red;
+      rotateLeft(grandparent);
    } else {
-      rotatedNode = rotateRight(grandparent);
-      rotatedNode->rightChild->color = red;
+      rotateRight(grandparent);
    }
-   rotatedNode->color = black;
-   rotatedNode->parent = gGrandparent;
 
-   if (gGrandparent == nullptr) { root = rotatedNode; } 
-   else if (gpIsLeftChild) { gGrandparent->leftChild = rotatedNode; }
-   else { gGrandparent->rightChild = rotatedNode; }
+   grandparent->color = red;
+   parent->color = black;
+
 }
 
 
 void RedBlackTree::remRebalance(TreeNode* node) {
    
-   remRebalanceCase rebcase = determineRemRebalanceCase(node);
+   remRebalanceCase rebCase = determineRemRebalanceCase(node);
 
-   if (rebcase == remcase2) {
+   if (rebCase == remcase2) {
       remRebalanceCase2(node);
-   } else if (rebcase == remcase3) {
+   } else if (rebCase == remcase3) {
       remRebalanceCase3(node);
-   } else if (rebcase == remcase4) {
+   } else if (rebCase == remcase4) {
       remRebalanceCase4(node);
-   } else if (rebcase == remcase5) {
+   } else if (rebCase == remcase5) {
       remRebalanceCase5(node);
-   } else {
+   } else if (rebCase == remcase6) {
       remRebalanceCase6(node);
    }
 
@@ -270,32 +283,15 @@ void RedBlackTree::remRebalance(TreeNode* node) {
 
 
 void RedBlackTree::remRebalanceCase2(TreeNode* node) {
-   
-   TreeNode* grandparent = getGrandparent(node);
-   bool parentWasRightChild;
-   TreeNode* rotatedNode;
-   if (grandparent != nullptr) {
-      parentWasRightChild = isRightChild(node->parent);
-   }
-
+  
    node->parent->color = red;
    getSibling(node)->color = black;
 
    if (isRightChild(node)) {
-      rotatedNode = rotateRight(node->parent);
+      rotateRight(node->parent);
    } else {
-      rotatedNode = rotateLeft(node->parent);
+      rotateLeft(node->parent);
    }
-
-   if (grandparent == nullptr) { root = rotatedNode; }
-
-   else if (parentWasRightChild) {
-      grandparent->rightChild = rotatedNode;
-   } else {
-      grandparent->leftChild = rotatedNode;
-   }
-
-   rotatedNode->parent = grandparent;
 
    remRebalance(node);
 }
@@ -316,16 +312,35 @@ void RedBlackTree::remRebalanceCase4(TreeNode* node) {
 }
 
 void RedBlackTree::remRebalanceCase5(TreeNode* node) {
-   TreeNode* rotatedNode;
+   
+   TreeNode* sibling = getSibling(node);
 
-   if (isRightChild(node)) {
-
+   if (isRightChild(sibling)) {
+      rotateRight(sibling);
+   } else {
+      rotateLeft(sibling);
    }
 
+   sibling->color = red;
+   sibling->parent->color = black;
+
+   remRebalance(node);
 }
 
 void RedBlackTree::remRebalanceCase6(TreeNode* node) {
 
+   TreeNode* parent = node->parent;
+
+   if (isRightChild(node)) {
+      rotateRight(parent);
+   } else {
+      rotateLeft(parent);
+   }
+
+   nodeColor parentOldColor = parent->color;
+   parent->color = parent->parent->color;
+   parent->parent->color = parentOldColor;
+   getSibling(parent)->color = black;
 }
 
 
@@ -366,8 +381,16 @@ remRebalanceCase RedBlackTree::determineRemRebalanceCase(TreeNode* node) const {
          return remcase4;
    }
 
-   if ((isRightChild(sibling) && sibling->leftChild->color == red)
-      || (!isRightChild(sibling) && sibling->rightChild->color == red)) {
+   // if either: 
+   // sibling is right child with a left red child and right black child
+   // OR
+   // sibling is a left child with a right red child and a left black child
+   if ((isRightChild(sibling) 
+      && sibling->leftChild->color == red
+      && sibling->rightChild->color == black)
+      || (!isRightChild(sibling) 
+      && sibling->rightChild->color == red
+      && sibling->leftChild->color == black)) {
          return remcase5;
    }
 
@@ -377,7 +400,13 @@ remRebalanceCase RedBlackTree::determineRemRebalanceCase(TreeNode* node) const {
 
 
 
-TreeNode* RedBlackTree::rotateLeft(TreeNode* node) {
+void RedBlackTree::rotateLeft(TreeNode* node) {
+   TreeNode* parent = node->parent;
+   bool nodeWasRightChild;
+   if (parent != nullptr) {
+      nodeWasRightChild = isRightChild(node);
+   }
+   
    TreeNode* oldChild = node->rightChild;
 
    node->rightChild = oldChild->leftChild;
@@ -386,11 +415,24 @@ TreeNode* RedBlackTree::rotateLeft(TreeNode* node) {
    oldChild->leftChild = node;
    node->parent = oldChild;
 
-   return oldChild;
+   if (parent != nullptr) {
+      if (nodeWasRightChild) { parent->rightChild = oldChild; }
+      else { parent->leftChild = oldChild; }
+   } else {
+      root = oldChild;
+   }
+
+   oldChild->parent = parent;
 }
 
 
-TreeNode* RedBlackTree::rotateRight(TreeNode* node) {
+void RedBlackTree::rotateRight(TreeNode* node) {
+   TreeNode* parent = node->parent;
+   bool nodeWasRightChild;
+   if (parent != nullptr) {
+      nodeWasRightChild = isRightChild(node);
+   }
+   
    TreeNode* oldChild = node->leftChild;
 
    node->leftChild = oldChild->rightChild;
@@ -399,7 +441,15 @@ TreeNode* RedBlackTree::rotateRight(TreeNode* node) {
    oldChild->rightChild = node;
    node->parent = oldChild;
 
-   return oldChild;
+   if (parent != nullptr) {
+      if (nodeWasRightChild) { parent->rightChild = oldChild; }
+      else { parent->leftChild = oldChild; }
+   } else {
+      root = oldChild;
+   }
+
+
+   oldChild->parent = parent;
 }
 
 
@@ -410,15 +460,30 @@ bool RedBlackTree::isRightChild(TreeNode* node) const {
 
 
 void RedBlackTree::printTree() const {
-   printTree(root);
+   if (size != 0) {
+      std::queue<TreeNode*> q;
+      int depth = 0;
+
+      if (root != nullptr) { q.push(root); }
+
+      while (!q.empty()) {
+         TreeNode* current = q.front();
+         q.pop();
+         std::cout << current->data << ", " << current->color << std::endl;
+
+         if (!current->leftChild->isNullLeaf) { q.push(current->leftChild); }
+         if (!current->rightChild->isNullLeaf) { q.push(current->rightChild); }
+
+      }
+   }
 }
 
 
-void RedBlackTree::printTree(TreeNode* node) const {
+void RedBlackTree::printTree(TreeNode* node, int depth) const {
    if(node != nullptr && !node->isNullLeaf) {
-      printTree(node->leftChild);
-      std::cout << node->data << std::endl;
-      printTree(node->rightChild);
+      printTree(node->leftChild, depth + 1);
+      std::cout << node->data << ", " << depth << ", " << node->color << std::endl;
+      printTree(node->rightChild, depth + 1);
    }
 }
 
@@ -431,11 +496,13 @@ void RedBlackTree::validateTree() const {
 
 void RedBlackTree::validateTree(TreeNode* node, int blacks) const {
    
-   if (node->isNullLeaf) {
-      std::cout << blacks + 1 << std::endl;
-   } else {
-      if (node->color == black) { blacks++; }
-      validateTree(node->leftChild, blacks);
-      validateTree(node->rightChild, blacks);
+   if (size != 0) {
+      if (node->isNullLeaf) {
+         std::cout << blacks + 1 << std::endl;
+      } else {
+         if (node->color == black) { blacks++; }
+         validateTree(node->leftChild, blacks);
+         validateTree(node->rightChild, blacks);
+      }
    }
 }
